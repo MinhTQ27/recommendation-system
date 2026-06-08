@@ -1,72 +1,45 @@
-#################################################################################
-# GLOBALS                                                                       #
-#################################################################################
-
-PROJECT_NAME = recommendation_system
+SOURCE_FOLDER = recommendation_system
+TEST_FOLDER = tests
 PYTHON_VERSION = 3.13
 PYTHON_INTERPRETER = python
 
-#################################################################################
-# COMMANDS                                                                      #
-#################################################################################
-
-
-## Install Python dependencies
-.PHONY: requirements
-requirements:
+## Set up venv and install dependencies
+.PHONY: venv
+venv:
+	uv venv --python $(PYTHON_VERSION)
 	uv sync
-	
-
-
+	uv run pre-commit install
+	@echo ">>> New uv virtual environment created. Activate with:"
+	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
+	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
 
 ## Delete all compiled Python files
 .PHONY: clean
 clean:
 	find . -type f -name "*.py[co]" -delete
-	find . -type d -name "__pycache__" -delete
+	find . -type d -name "__pycache__" -exec rm -rf {} +
 
-
-## Lint using ruff (use `make format` to do formatting)
-.PHONY: lint
-lint:
-	ruff format --check
-	ruff check
-
-## Format source code with ruff
+## Format source code
 .PHONY: format
 format:
-	ruff check --fix
-	ruff format
+	uv run ruff format $(SOURCE_FOLDER) $(TEST_FOLDER)
+	uv run ruff check --fix $(SOURCE_FOLDER) $(TEST_FOLDER)
 
-
+## Run static checks
+.PHONY: check
+check:
+	uv run ruff format --check $(SOURCE_FOLDER) $(TEST_FOLDER)
+	uv run ruff check $(SOURCE_FOLDER) $(TEST_FOLDER)
+	uv run pyright $(SOURCE_FOLDER)
+	uv run bandit -r $(SOURCE_FOLDER)
 
 ## Run tests
 .PHONY: test
 test:
-	python -m pytest tests
+	uv run pytest -s --durations=0 $(TEST_FOLDER)
 
 
-## Set up Python interpreter environment
-.PHONY: create_environment
-create_environment:
-	uv venv --python $(PYTHON_VERSION)
-	@echo ">>> New uv virtual environment created. Activate with:"
-	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
-	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
-	
-
-
-
-#################################################################################
-# PROJECT RULES                                                                 #
-#################################################################################
-
-
-
-#################################################################################
-# Self Documenting Commands                                                     #
-#################################################################################
-
+# Self Documenting Commands
 .DEFAULT_GOAL := help
 
 define PRINT_HELP_PYSCRIPT
@@ -78,5 +51,6 @@ print('\n'.join(['{:25}{}'.format(*reversed(match)) for match in matches]))
 endef
 export PRINT_HELP_PYSCRIPT
 
+## Show available make targets
 help:
 	@$(PYTHON_INTERPRETER) -c "${PRINT_HELP_PYSCRIPT}" < $(MAKEFILE_LIST)

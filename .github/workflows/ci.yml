@@ -1,0 +1,81 @@
+name: CI workflow
+
+on:
+    pull_request:
+        branches:
+        -   main
+
+jobs:
+    ci:
+        strategy:
+            matrix:
+                os: ["ubuntu-latest"]
+                python-version: ["3.13"]
+
+        runs-on: ${{ matrix.os }}
+
+        timeout-minutes: 2
+
+        steps:
+        -   uses: actions/checkout@v6
+
+        -   name: Check changed lines
+            run: |
+                MAX_CHANGED_LINES=500
+                DIFF_RANGE="origin/main..HEAD"
+                git fetch origin main
+                CHANGED=$(git diff --numstat "$DIFF_RANGE" | awk '
+                    {added+=$1; deleted+=$2}
+                    END{print added+deleted}
+                ')
+                if [[ -n "$CHANGED" ]] && (( CHANGED > MAX_CHANGED_LINES )); then
+                    echo "::error::Too many changes: $CHANGED lines, limit is $MAX_CHANGED_LINES"
+                    exit 1
+                fi
+
+        -   name: Check file length
+            run: |
+                MAX_LENGTH=500
+                for file in $(git ls-files); do
+                    if [[ "$file" != */recommendation_system/* && "$file" != */tests/* ]]; then
+                        continue
+                    fi
+                    count_line=$(wc -l < "$file")
+                    if (( count_line > MAX_LENGTH )); then
+                        echo "::error file=$file::Too many lines: $count_line lines, limit is $MAX_LENGTH"
+                        exit 1
+                    fi
+                done
+
+        -   name: Set up Python ${{ matrix.python-version }}
+            uses: actions/setup-python@v6
+            with:
+                python-version: ${{ matrix.python-version }}
+
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v6
+            with:
+                python-version: ${{ matrix.python-version }}
+
+        -   name: Cache uv dependencies
+            uses: actions/cache@v5
+            with:
+                path: ~/.cache/uv
+                key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+                restore-keys: |
+                    ${{ runner.os }}-uv-${{ matrix.python-version }}
+                    ${{ runner.os }}-uv
+
+        -   name: Create venv and install dependencies
+            run: |
+                uv venv --python ${{ matrix.python-version }}
+                uv pip install -e .
+
+        -   name: Run test
+            run: |
+                SOURCE_FOLDER=./recommendation_system
+                TEST_FOLDER=./tests
+                uv run ruff check "${SOURCE_FOLDER}" "${TEST_FOLDER}"
+                uv run pyright "${SOURCE_FOLDER}"
+                uv run bandit -r "${SOURCE_FOLDER}"
+                uv run pytest -s --durations=0 "${TEST_FOLDER}"

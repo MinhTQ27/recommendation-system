@@ -30,7 +30,9 @@ requires-python = "~=3.13.0"
 [tool.ruff]
 line-length = 99
 src = ["recommendation_system"]
-include = ["pyproject.toml", "recommendation_system/**/*.py"]
+include = ["pyproject.toml",
+          "recommendation_system/**/*.py",
+          "tests/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = ["I"]  # Add import sorting
